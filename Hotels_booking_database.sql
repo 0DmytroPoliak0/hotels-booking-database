@@ -9,8 +9,6 @@ CREATE TABLE IF NOT EXISTS User (
    userID VARCHAR(36) PRIMARY KEY,
    name VARCHAR(100) NOT NULL,
    email VARCHAR(100) UNIQUE NOT NULL
-  -- bookingInfo TEXT,
-  -- FOREIGN KEY (bookingInfo) REFERENCES Booking(bookingInfo) ON DELETE CASCADE
 );
 
 -- Create the Admin table with UUID as primary key
@@ -41,14 +39,21 @@ CREATE TABLE IF NOT EXISTS Hotel (
    FOREIGN KEY (adminID) REFERENCES Admin(adminID)
 );
 
--- Create the Room table with auto-increment primary key and hotelID foreign key
+-- Create the RoomType table with roomType as primary key
+CREATE TABLE IF NOT EXISTS RoomType (
+   roomType VARCHAR(100) PRIMARY KEY
+);
+
+-- Create the Room table with auto-increment primary key and foreign key references to Hotel and RoomType
 CREATE TABLE IF NOT EXISTS Room (
    roomID INT AUTO_INCREMENT PRIMARY KEY,
    roomType VARCHAR(100) NOT NULL,
    rate DECIMAL(10, 2) NOT NULL,
    availability BOOLEAN NOT NULL DEFAULT TRUE,
+   numberOfPeople INT NOT NULL,
    hotelID INT,
-   FOREIGN KEY (hotelID) REFERENCES Hotel(hotelID) ON DELETE CASCADE
+   FOREIGN KEY (hotelID) REFERENCES Hotel(hotelID) ON DELETE CASCADE,
+   FOREIGN KEY (roomType) REFERENCES RoomType(roomType) ON DELETE CASCADE
 );
 
 -- Create the Booking table with UUID as primary key
@@ -59,12 +64,8 @@ CREATE TABLE IF NOT EXISTS Booking (
    checkOutDate DATE NOT NULL,
    userID VARCHAR(36),
    bookingInfo TEXT,
-  -- creditCardNUmber VARCHAR(16) NOT NULL, -- Add credit card number
-   -- paymentType VARCHAR(16) NOT NULL,
    FOREIGN KEY (userID) REFERENCES User(userID) ON DELETE CASCADE,
    FOREIGN KEY (roomID) REFERENCES Room(roomID) ON DELETE CASCADE
-  -- FOREIGN KEY (creditCardNUmber, bookingID) REFERENCES Payment(creditCardNUmber, bookingID) ON DELETE CASCADE, -- Add foreign key for payment
-  -- FOREIGN KEY (paymentType) REFERENCES Payment(paymentType) ON DELETE CASCADE
 );
 
 -- Create the Reports table with UUID as primary key
@@ -101,6 +102,32 @@ CREATE TABLE IF NOT EXISTS Email (
    FOREIGN KEY (staffID) REFERENCES Staff(staffID)
 );
 
+-- Create the Preferences table
+CREATE TABLE IF NOT EXISTS Preferences (
+   userID VARCHAR(36) NOT NULL,
+   roomType VARCHAR(100) ,
+   numberOfPeople INT,
+   rate DECIMAL(10, 2) NOT NULL,
+   PRIMARY KEY (userID, roomType, numberOfPeople, rate),
+   FOREIGN KEY (userID) REFERENCES User(userID),
+   FOREIGN KEY (rate) REFERENCES Room(rate),
+   FOREIGN KEY (roomType) REFERENCES RoomType(roomType)
+);
+
+-- other way
+
+-- щерукalter
+-- Create the Preferences table
+CREATE TABLE IF NOT EXISTS Preferences (
+   userID VARCHAR(36) NOT NULL,
+   roomType VARCHAR(100) NOT NULL,
+   numberOfPeople INT NOT NULL,
+   rate DECIMAL(10, 2),
+   PRIMARY KEY (userID, roomType, numberOfPeople, rate),
+   FOREIGN KEY (userID) REFERENCES User(userID),
+   FOREIGN KEY (roomType) REFERENCES Room(roomType) ON DELETE CASCADE
+);
+
 -- Insert data into User table
 INSERT INTO User (userID, name, email) VALUES 
 (UUID(), 'John Doe', 'johndoe@example.com'),
@@ -114,126 +141,80 @@ INSERT INTO Admin (adminID, name, email, password) VALUES
 (UUID(), 'Super Admin', 'superadmin@example.com', 'superadminpassword');
 
 -- Insert data into Staff table
-INSERT INTO Staff (staffID, name, email, password) VALUES 
-(UUID(), 'Staff Member', 'staff@example.com', 'staffpassword'),
-(UUID(), 'Assistant Manager', 'assistantmanager@example.com', 'assistantmanagerpassword');
+INSERT INTO Staff (staffID, name, email, password, adminID) VALUES 
+(UUID(), 'Staff Member', 'staff@example.com', 'staffpassword', (SELECT adminID FROM Admin WHERE name = 'Admin User')),
+(UUID(), 'Assistant Manager', 'assistantmanager@example.com', 'assistantmanagerpassword', (SELECT adminID FROM Admin WHERE name = 'Super Admin'));
 
 -- Insert data into Hotel table
-INSERT INTO Hotel (name, address, contact) VALUES 
-('Hotel C', '789 Elm St, Village', '456-789-0123'),
-('Hotel D', '789 Oak St, Town', '321-654-0987'),
-('Hotel E', '456 Pine St, City', '789-012-3456'),
-('Hotel F', '123 Maple St, Suburb', '654-321-9870'),
-('Hotel G', '789 Cedar St, Beach', '210-987-6543'),
-('Hotel H', '456 Birch St, Mountain', '543-210-8769'),
-('Hotel I', '123 Walnut St, Island', '678-901-2345'),
-('Hotel J', '789 Spruce St, Countryside', '987-654-3210'),
-('Hotel K', '456 Birch St, Desert', '876-543-2109'),
-('Hotel L', '123 Fir St, Lakeside', '012-345-6789');
+INSERT INTO Hotel (name, address, contact, adminID) VALUES 
+('Hotel C', '789 Elm St, Village', '456-789-0123', (SELECT adminID FROM Admin WHERE name = 'Admin User')),
+('Hotel D', '789 Oak St, Town', '321-654-0987', (SELECT adminID FROM Admin WHERE name = 'Admin User')),
+('Hotel E', '456 Pine St, City', '789-012-3456', (SELECT adminID FROM Admin WHERE name = 'Super Admin')),
+('Hotel F', '123 Maple St, Suburb', '654-321-9870', (SELECT adminID FROM Admin WHERE name = 'Super Admin'));
 
 
-SET SQL_SAFE_UPDATES = 0;
--- Assign Admin User to manage hotels C, D, E, and F
-UPDATE Hotel
-SET adminID = (SELECT adminID FROM Admin WHERE name = 'Admin User')
-WHERE hotelID IN (
-    SELECT temp.hotelID FROM (
-        SELECT hotelID FROM Hotel WHERE name IN ('Hotel C', 'Hotel D', 'Hotel E', 'Hotel F')
-    ) AS temp
-);
 
--- Assign Super Admin to manage hotels G, H, I, J, K, and L
-UPDATE Hotel
-SET adminID = (SELECT adminID FROM Admin WHERE name = 'Super Admin')
-WHERE hotelID IN (
-    SELECT temp.hotelID FROM (
-        SELECT hotelID FROM Hotel WHERE name IN ('Hotel G', 'Hotel H', 'Hotel I', 'Hotel J', 'Hotel K', 'Hotel L')
-    ) AS temp
-);
+ SET SQL_SAFE_UPDATES = 0;
+ -- Assign Admin User to manage hotels C, D, E, and F
+ UPDATE Hotel
+ SET adminID = (SELECT adminID FROM Admin WHERE name = 'Admin User')
+ WHERE hotelID IN (
+     SELECT temp.hotelID FROM (
+         SELECT hotelID FROM Hotel WHERE name IN ('Hotel C', 'Hotel D', 'Hotel E', 'Hotel F')
+     ) AS temp
+ );
+
+ -- Assign Super Admin to manage hotels G, H, I, J, K, and L
+ UPDATE Hotel
+ SET adminID = (SELECT adminID FROM Admin WHERE name = 'Super Admin')
+ WHERE hotelID IN (
+     SELECT temp.hotelID FROM (
+         SELECT hotelID FROM Hotel WHERE name IN ('Hotel G', 'Hotel H', 'Hotel I', 'Hotel J', 'Hotel K', 'Hotel L')
+     ) AS temp
+ );
 
 
-SET SQL_SAFE_UPDATES = 1;
+ SET SQL_SAFE_UPDATES = 1;
 
--- Insert rooms for each hotel
+
+-- Insert data into RoomType table
+INSERT INTO RoomType (roomType) VALUES 
+('Standard'),
+('Deluxe'),
+('Suite');
+
+-- Insert rooms for each hotel along with room type and number of people
 -- Hotel C
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 100.00, TRUE, 1),
-('Standard', 100.00, TRUE, 1),
-('Standard', 100.00, TRUE, 1),
-('Deluxe', 150.00, TRUE, 1),
-('Deluxe', 150.00, TRUE, 1);
+INSERT INTO Room (roomType, rate, availability, numberOfPeople, hotelID) VALUES
+('Standard', 100.00, TRUE, 2, 1),
+('Standard', 100.00, TRUE, 2, 1),
+('Standard', 100.00, TRUE, 2, 1),
+('Deluxe', 150.00, TRUE, 4, 1),
+('Deluxe', 150.00, TRUE, 4, 1);
 
 -- Hotel D
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 90.00, TRUE, 2),
-('Standard', 90.00, TRUE, 2),
-('Deluxe', 130.00, TRUE, 2),
-('Deluxe', 130.00, TRUE, 2),
-('Suite', 180.00, TRUE, 2);
+INSERT INTO Room (roomType, rate, availability, numberOfPeople, hotelID) VALUES
+('Standard', 90.00, TRUE, 2, 2),
+('Standard', 90.00, TRUE, 2, 2),
+('Deluxe', 130.00, TRUE, 4, 2),
+('Deluxe', 130.00, TRUE, 4, 2),
+('Suite', 180.00, TRUE, 6, 2);
 
 -- Hotel E
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 110.00, TRUE, 3),
-('Standard', 110.00, TRUE, 3),
-('Standard', 110.00, TRUE, 3),
-('Deluxe', 160.00, TRUE, 3),
-('Suite', 220.00, TRUE, 3);
+INSERT INTO Room (roomType, rate, availability, numberOfPeople, hotelID) VALUES
+('Standard', 110.00, TRUE, 2, 3),
+('Standard', 110.00, TRUE, 2, 3),
+('Standard', 110.00, TRUE, 2, 3),
+('Deluxe', 160.00, TRUE, 4, 3),
+('Suite', 220.00, TRUE, 6, 3);
 
 -- Hotel F
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 95.00, TRUE, 4),
-('Standard', 95.00, TRUE, 4),
-('Deluxe', 140.00, TRUE, 4),
-('Deluxe', 140.00, TRUE, 4),
-('Suite', 200.00, TRUE, 4);
-
--- Hotel G
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 120.00, TRUE, 5),
-('Standard', 120.00, TRUE, 5),
-('Standard', 120.00, TRUE, 5),
-('Deluxe', 170.00, TRUE, 5),
-('Suite', 240.00, TRUE, 5);
-
--- Hotel H
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 100.00, TRUE, 6),
-('Standard', 100.00, TRUE, 6),
-('Deluxe', 150.00, TRUE, 6),
-('Deluxe', 150.00, TRUE, 6),
-('Suite', 210.00, TRUE, 6);
-
--- Hotel I
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 130.00, TRUE, 7),
-('Standard', 130.00, TRUE, 7),
-('Standard', 130.00, TRUE, 7),
-('Deluxe', 180.00, TRUE, 7),
-('Suite', 260.00, TRUE, 7);
-
--- Hotel J
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 110.00, TRUE, 8),
-('Standard', 110.00, TRUE, 8),
-('Standard', 110.00, TRUE, 8),
-('Deluxe', 160.00, TRUE, 8),
-('Suite', 230.00, TRUE, 8);
-
--- Hotel K
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 140.00, TRUE, 9),
-('Standard', 140.00, TRUE, 9),
-('Deluxe', 190.00, TRUE, 9),
-('Deluxe', 190.00, TRUE, 9),
-('Suite', 270.00, TRUE, 9);
-
--- Hotel L
-INSERT INTO Room (roomType, rate, availability, hotelID) VALUES
-('Standard', 120.00, TRUE, 10),
-('Standard', 120.00, TRUE, 10),
-('Standard', 120.00, TRUE, 10),
-('Deluxe', 170.00, TRUE, 10),
-('Suite', 250.00, TRUE, 10);
+INSERT INTO Room (roomType, rate, availability, numberOfPeople, hotelID) VALUES
+('Standard', 95.00, TRUE, 2, 4),
+('Standard', 95.00, TRUE, 2, 4),
+('Deluxe', 140.00, TRUE, 4, 4),
+('Deluxe', 140.00, TRUE, 4, 4),
+('Suite', 200.00, TRUE, 6, 4);
 
 -- Insert data into Booking table
 INSERT INTO Booking (bookingID, roomID, checkInDate, checkOutDate, userID, bookingInfo) VALUES 
@@ -242,8 +223,8 @@ INSERT INTO Booking (bookingID, roomID, checkInDate, checkOutDate, userID, booki
 
 -- Insert data into Reports table
 INSERT INTO Reports (reportID, title, reportType, content, bookingID) VALUES 
-(UUID(), 'Monthly Report', 'Sales', 'This report contains sales data for the month of February.', (SELECT bookingID FROM Booking WHERE userID = (SELECT userID FROM User WHERE email = 'johndoe@example.com'))),
-(UUID(), 'Monthly Report', 'Sales', 'This report contains sales data for the month of March.', (SELECT bookingID FROM Booking WHERE userID = (SELECT userID FROM User WHERE email = 'alice@example.com')));
+(UUID(), 'Monthly Report', 'Sales', 'This report contains sales data for the month of February.', (SELECT bookingID FROM Booking WHERE roomID = 3)),
+(UUID(), 'Monthly Report', 'Sales', 'This report contains sales data for the month of March.', (SELECT bookingID FROM Booking WHERE roomID = 4));
 
 -- Insert data into Payment table
 INSERT INTO Payment (creditCardNUmber, bookingID, paymentType, staffID) VALUES 
@@ -255,15 +236,12 @@ INSERT INTO Email (creditCardNUmber, bookingID, emailBody, staffID) VALUES
 ('1234567890123456', (SELECT bookingID FROM Booking WHERE roomID = 3), 'Thank you for your booking.', (SELECT staffID FROM Staff WHERE name = 'Staff Member')),
 ('9876543210987654', (SELECT bookingID FROM Booking WHERE roomID = 4), 'Confirmation of your booking.', (SELECT staffID FROM Staff WHERE name = 'Assistant Manager'));
 
--- Insert data into Payment table
-INSERT INTO Payment (creditCardNUmber, bookingID, paymentType, staffID) VALUES 
-('1234567890123456', 'booking_id_1', 'Credit Card', 'staff_id_1'),
-('9876543210987654', 'booking_id_2', 'Debit Card', 'staff_id_2');
-
--- Insert data into Email table
-INSERT INTO Email (creditCardNUmber, bookingID, emailBody, staffID) VALUES 
-('1234567890123456', 'booking_id_1', 'Thank you for your booking.', 'staff_id_1'),
-('9876543210987654', 'booking_id_2', 'Confirmation of your booking.', 'staff_id_2');
+-- Insert data into Preferences table
+INSERT INTO Preferences (userID, roomType, rate, numberOfPeople) VALUES 
+((SELECT userID FROM User WHERE email = 'johndoe@example.com'), 'Standard', 100.00, 2),
+((SELECT userID FROM User WHERE email = 'alice@example.com'), 'Deluxe', 150.00, 4),
+((SELECT userID FROM User WHERE email = 'emma@example.com'), 'Standard', 100.00, 2),
+((SELECT userID FROM User WHERE email = 'michael@example.com'), 'Deluxe', 150.00, 4);
 
 
 -- Retrieve all users, admins, bookings, reports, staff, hotels
@@ -276,6 +254,9 @@ SELECT * FROM Hotel;
 SELECT * FROM Room;
 SELECT * FROM Payment;
 SELECT * FROM Email;
+SELECT * FROM Preferences;
+
+
 
 -- Retrieve all bookings with corresponding user information
 SELECT Booking.bookingID, Booking.roomID, Booking.checkInDate, Booking.checkOutDate, Booking.bookingInfo, User.name AS customerName, User.email AS customerEmail
@@ -318,14 +299,14 @@ ORDER BY TotalBookings DESC
 LIMIT 1;
 
 -- Summary of Rooms Categorized
-SELECT Room.categoryID, COUNT(*) AS TotalRooms
+SELECT Room.roomType, COUNT(*) AS TotalRooms
 FROM Room
-GROUP BY Room.categoryID;
+GROUP BY Room.roomType;
 
 -- List of Rooms Categorized
-SELECT Room.roomID, Room.roomType, Room.rate, Room.categoryID
+SELECT Room.roomID, Room.roomType, Room.rate
 FROM Room
-ORDER BY Room.categoryID;
+ORDER BY Room.roomType;
 
 -- Additional Data Analysis
 
@@ -382,6 +363,14 @@ ORDER BY Year, Month;
 
 
 
+
+
+
+
+
+
+
+
 -- Drop the Email table
 DROP TABLE IF EXISTS Email;
 -- Drop the Payment table
@@ -394,9 +383,13 @@ DROP TABLE IF EXISTS Booking;
 DROP TABLE IF EXISTS Room;
 -- Drop the Hotel table
 DROP TABLE IF EXISTS Hotel;
+-- Drop the Preferences table
+DROP TABLE IF EXISTS Preferences;
 -- Drop the User table
 DROP TABLE IF EXISTS User;
 -- Drop the Staff table
 DROP TABLE IF EXISTS Staff;
 -- Drop the Admin table
 DROP TABLE IF EXISTS Admin;
+-- Drop the RoomType table
+DROP TABLE IF EXISTS RoomType;
